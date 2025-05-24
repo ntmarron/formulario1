@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Formulário de Ocorrência</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    input, button, select { margin: 5px 0; padding: 8px; width: 100%; box-sizing: border-box; }
+    #dadosAdicionadosWrapper { overflow-x: auto; margin-top: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; table-layout: auto; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: left; white-space: nowrap; }
+    #visualizacao table { width: 100%; table-layout: auto; }
+    #visualizacao th { text-align: left; white-space: nowrap; }
+    #visualizacao td { text-align: left; }
+    #videoContainer { display: flex; justify-content: center; margin-bottom: 10px; }
+    #video { max-width: 100%; height: auto; }
+  </style>
+</head>
+<body>
+  <h1>Registro de Ocorrência</h1>
+
+  <button onclick="obterCoordenadas()">Obter Coordenadas, Data e Hora</button><br>
+  <label>Latitude:</label><input type="text" id="latitude" readonly>
+  <label>Longitude:</label><input type="text" id="longitude" readonly>
+  <label>Data:</label><input type="text" id="data" readonly>
+  <label>Hora:</label><input type="text" id="hora" readonly>
+
+  <h3>Foto:</h3>
+  <div id="videoContainer">
+    <video id="video" autoplay playsinline></video>
+  </div>
+  <button onclick="abrirCamera()">Abrir Câmera</button>
+  <button onclick="tirarFoto()">Tirar Foto</button><br>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <img id="fotoCapturada" src="" alt="Foto" style="display:none; width:100%; height:auto;">
+
+  <label>Nome:</label><input type="text" id="nome">
+  <label>Data de Nascimento:</label><input type="date" id="dataNascimento">
+  <label>Profissão:</label><input type="text" id="profissao">
+  <label>Endereço:</label><input type="text" id="endereco">
+
+  <button onclick="visualizarDados()">Visualizar</button>
+  <button onclick="adicionarDados()">Adicionar</button>
+  <button onclick="exportarParaExcel()">Exportar Excel</button>
+  <button onclick="confirmarLimparFormulario()">Limpar Formulário</button>
+  <button onclick="confirmarLimparDados()">Limpar Dados Adicionados</button>
+
+  <div id="visualizacao"></div>
+  <div id="dadosAdicionadosWrapper"><div id="dadosAdicionados"></div></div>
+
+  <script>
+    let dados = [];
+    let stream;
+
+    function obterCoordenadas() {
+      const date = new Date();
+      document.getElementById('data').value = date.toLocaleDateString();
+      document.getElementById('hora').value = date.toLocaleTimeString();
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            document.getElementById('latitude').value = pos.coords.latitude;
+            document.getElementById('longitude').value = pos.coords.longitude;
+          },
+          err => {
+            console.warn('Geolocalização não disponível:', err);
+            document.getElementById('latitude').value = 'Não disponível';
+            document.getElementById('longitude').value = 'Não disponível';
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      }
+    }
+
+    function abrirCamera() {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+        .then(s => {
+          stream = s;
+          document.getElementById('video').srcObject = stream;
+        })
+        .catch(err => alert('Erro ao acessar a câmera: ' + err.name + ": " + err.message));
+    }
+
+    function pararCamera() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        document.getElementById('video').srcObject = null;
+      }
+    }
+
+    function tirarFoto() {
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const context = canvas.getContext('2d');
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const foto = canvas.toDataURL('image/webp', 0.5); // Formato mais compacto
+      document.getElementById('fotoCapturada').src = foto;
+      document.getElementById('fotoCapturada').style.display = 'block';
+      pararCamera();
+    }
+
+    function visualizarDados() {
+      const dadosVisuais = coletarDados();
+      let html = '<table>';
+      for (let campo in dadosVisuais) {
+        html += '<tr><th>' + campo + '</th><td>' + dadosVisuais[campo] + '</td></tr>';
+      }
+      html += '</table>';
+      document.getElementById('visualizacao').innerHTML = html;
+    }
+
+    function adicionarDados() {
+      if (!confirm('Deseja adicionar os dados?')) return;
+      const dadosItem = coletarDados();
+      dados.unshift(dadosItem);
+      atualizarTabela();
+      limparFormulario();
+      pararCamera();
+    }
+
+    function atualizarTabela() {
+      if (dados.length === 0) {
+        document.getElementById('dadosAdicionados').innerHTML = '';
+        return;
+      }
+      let html = '<table><tr>';
+      for (let campo in dados[0]) html += '<th>' + campo + '</th>';
+      html += '</tr>';
+      for (let d of dados) {
+        html += '<tr>';
+        for (let campo in d) html += '<td>' + d[campo] + '</td>';
+        html += '</tr>';
+      }
+      html += '</table>';
+      document.getElementById('dadosAdicionados').innerHTML = html;
+    }
+
+    function exportarParaExcel() {
+      if (!confirm('Deseja exportar os dados para Excel?')) return;
+      let csv = '';
+      if (dados.length === 0) return alert('Nenhum dado para exportar.');
+      csv += Object.keys(dados[0]).join(',') + '\n';
+      for (let d of dados) csv += Object.values(d).map(v => '"' + v.replace(/"/g, '""') + '"').join(',') + '\n';
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'dados.csv');
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function confirmarLimparFormulario() {
+      if (confirm('Deseja limpar o formulário?')) limparFormulario();
+    }
+
+    function limparFormulario() {
+      const ids = ['latitude', 'longitude', 'data', 'hora', 'nome', 'dataNascimento', 'profissao', 'endereco'];
+      ids.forEach(id => document.getElementById(id).value = '');
+      document.getElementById('fotoCapturada').style.display = 'none';
+      document.getElementById('fotoCapturada').src = '';
+      document.getElementById('visualizacao').innerHTML = '';
+    }
+
+    function confirmarLimparDados() {
+      if (confirm('Deseja limpar todos os dados adicionados?')) {
+        dados = [];
+        document.getElementById('dadosAdicionados').innerHTML = '';
+      }
+    }
+
+    function coletarDados() {
+      return {
+        Latitude: document.getElementById('latitude').value,
+        Longitude: document.getElementById('longitude').value,
+        Data: document.getElementById('data').value,
+        Hora: document.getElementById('hora').value,
+        Nome: document.getElementById('nome').value,
+        "Data de Nascimento": document.getElementById('dataNascimento').value,
+        Profissão: document.getElementById('profissao').value,
+        Endereço: document.getElementById('endereco').value,
+        Foto: document.getElementById('fotoCapturada').src || ''
+      };
+    }
+  </script>
+</body>
+</html>
