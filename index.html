@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Formulário de Ocorrência</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    input, button, select { margin: 5px 0; padding: 8px; width: 100%; box-sizing: border-box; }
+    #dadosAdicionadosWrapper { overflow-x: auto; margin-top: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; table-layout: auto; }
+    th, td { border: 1px solid #ccc; padding: 8px; white-space: nowrap; text-align: left; }
+    #visualizacao table { width: 100%; table-layout: auto; }
+    #visualizacao th { text-align: right; width: 30%; white-space: nowrap; }
+    #visualizacao td { text-align: left; width: 70%; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <h1>Registro de Ocorrência</h1>
+
+  <button onclick="obterCoordenadas()">Obter Coordenadas, Data e Hora</button><br>
+  <label>Latitude:</label><input type="text" id="latitude" readonly>
+  <label>Longitude:</label><input type="text" id="longitude" readonly>
+  <label>Data:</label><input type="text" id="data" readonly>
+  <label>Hora:</label><input type="text" id="hora" readonly>
+
+  <h3>Foto:</h3>
+  <video id="video" width="320" height="240" autoplay></video><br>
+  <button onclick="abrirCamera()">Abrir Câmera</button>
+  <button onclick="tirarFoto()">Tirar Foto</button><br>
+  <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
+  <img id="fotoCapturada" src="" alt="Foto" style="display:none; width:320px; height:240px;">
+
+  <label>Nome:</label><input type="text" id="nome">
+  <label>Data de Nascimento:</label><input type="date" id="dataNascimento">
+  <label>Profissão:</label>
+  <select id="profissao" onchange="preencherAtuacaoESituacao()">
+    <option value="">Selecione</option>
+    <option value="A">A</option>
+    <option value="B">B</option>
+    <option value="C">C</option>
+  </select>
+  <label>Atuação:</label><input type="text" id="atuacao" readonly>
+  <label>Situação:</label><input type="text" id="situacao" readonly>
+  <label>Endereço:</label><input type="text" id="endereco">
+
+  <button onclick="visualizarDados()">Visualizar</button>
+  <button onclick="adicionarDados()">Adicionar</button>
+  <button onclick="exportarParaExcel()">Exportar Excel</button>
+  <button onclick="confirmarLimparFormulario()">Limpar Formulário</button>
+  <button onclick="confirmarLimparDados()">Limpar Dados Adicionados</button>
+
+  <div id="visualizacao"></div>
+  <div id="dadosAdicionadosWrapper"><div id="dadosAdicionados"></div></div>
+
+  <script>
+    let dados = [];
+
+    const tabelaProfissoes = {
+      A: { atuacao: "MECANICO", situacao: "IDOSO" },
+      B: { atuacao: "MOTORISTA", situacao: "JOVEM" },
+      C: { atuacao: "ENGENHEIRO", situacao: "MULHER" }
+    };
+
+    function preencherAtuacaoESituacao() {
+      const profissao = document.getElementById('profissao').value;
+      const atuacaoField = document.getElementById('atuacao');
+      const situacaoField = document.getElementById('situacao');
+      if (tabelaProfissoes[profissao]) {
+        atuacaoField.value = tabelaProfissoes[profissao].atuacao;
+        situacaoField.value = tabelaProfissoes[profissao].situacao;
+      } else {
+        atuacaoField.value = '';
+        situacaoField.value = '';
+      }
+    }
+
+    function obterCoordenadas() {
+      const date = new Date();
+      document.getElementById('data').value = date.toLocaleDateString();
+      document.getElementById('hora').value = date.toLocaleTimeString();
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          pos => {
+            document.getElementById('latitude').value = pos.coords.latitude;
+            document.getElementById('longitude').value = pos.coords.longitude;
+          },
+          err => {
+            console.warn('Geolocalização não disponível:', err);
+            document.getElementById('latitude').value = 'Não disponível';
+            document.getElementById('longitude').value = 'Não disponível';
+          },
+          { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+        );
+      }
+    }
+
+    function abrirCamera() {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+        .then(stream => {
+          document.getElementById('video').srcObject = stream;
+        })
+        .catch(err => alert('Erro ao acessar a câmera: ' + err.name + ": " + err.message));
+    }
+
+    function tirarFoto() {
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('canvas');
+      const context = canvas.getContext('2d');
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const foto = canvas.toDataURL('image/png');
+      document.getElementById('fotoCapturada').src = foto;
+      document.getElementById('fotoCapturada').style.display = 'block';
+    }
+
+    function visualizarDados() {
+      const dadosVisuais = coletarDados();
+      let html = '<table>';
+      for (let campo in dadosVisuais) {
+        html += '<tr><th>' + campo + '</th><td>' + dadosVisuais[campo] + '</td></tr>';
+      }
+      html += '</table>';
+      document.getElementById('visualizacao').innerHTML = html;
+    }
+
+    function adicionarDados() {
+      if (!confirm('Deseja adicionar os dados?')) return;
+      const dadosItem = coletarDados();
+      dados.unshift(dadosItem);
+      atualizarTabela();
+      limparFormulario();
+    }
+
+    function atualizarTabela() {
+      if (dados.length === 0) {
+        document.getElementById('dadosAdicionados').innerHTML = '';
+        return;
+      }
+      let html = '<table><tr>';
+      for (let campo in dados[0]) html += '<th>' + campo + '</th>';
+      html += '</tr>';
+      for (let d of dados) {
+        html += '<tr>';
+        for (let campo in d) html += '<td>' + d[campo] + '</td>';
+        html += '</tr>';
+      }
+      html += '</table>';
+      document.getElementById('dadosAdicionados').innerHTML = html;
+    }
+
+    function exportarParaExcel() {
+      if (!confirm('Deseja exportar os dados para Excel?')) return;
+      let csv = '';
+      if (dados.length === 0) return alert('Nenhum dado para exportar.');
+      csv += Object.keys(dados[0]).join(',') + '\n';
+      for (let d of dados) csv += Object.values(d).join(',') + '\n';
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'dados.csv');
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    function confirmarLimparFormulario() {
+      if (confirm('Deseja limpar o formulário?')) limparFormulario();
+    }
+
+    function limparFormulario() {
+      const ids = ['latitude', 'longitude', 'data', 'hora', 'nome', 'dataNascimento', 'profissao', 'atuacao', 'situacao', 'endereco'];
+      ids.forEach(id => document.getElementById(id).value = '');
+      document.getElementById('fotoCapturada').style.display = 'none';
+      document.getElementById('visualizacao').innerHTML = '';
+    }
+
+    function confirmarLimparDados() {
+      if (confirm('Deseja limpar todos os dados adicionados?')) {
+        dados = [];
+        document.getElementById('dadosAdicionados').innerHTML = '';
+      }
+    }
+
+    function coletarDados() {
+      return {
+        Latitude: document.getElementById('latitude').value,
+        Longitude: document.getElementById('longitude').value,
+        Data: document.getElementById('data').value,
+        Hora: document.getElementById('hora').value,
+        Nome: document.getElementById('nome').value,
+        "Data de Nascimento": document.getElementById('dataNascimento').value,
+        Profissão: document.getElementById('profissao').value,
+        Atuação: document.getElementById('atuacao').value,
+        Situação: document.getElementById('situacao').value,
+        Endereço: document.getElementById('endereco').value,
+        Foto: document.getElementById('fotoCapturada').src || ''
+      };
+    }
+  </script>
+</body>
+</html>
