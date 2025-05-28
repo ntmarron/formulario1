@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Formulário de Dados</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background: #f2f2f2; }
+    label { display: block; margin-top: 10px; }
+    input, button { width: 100%; padding: 8px; margin-top: 5px; }
+    button { background-color: #4CAF50; color: white; border: none; cursor: pointer; }
+    button:hover { background-color: #45a049; }
+  </style>
+</head>
+<body>
+  <h2>Formulário de Dados Pessoais</h2>
+  <form id="formulario">
+    <label>Nome: <input type="text" name="nome" required></label>
+    <label>Mãe: <input type="text" name="mae" required></label>
+    <label>Pai: <input type="text" name="pai"></label>
+    <label>Telefone: <input type="tel" name="telefone"></label>
+    <label>Endereço: <input type="text" name="endereco"></label>
+    <button type="submit">Enviar para Google Planilha</button>
+  </form>
+
+  <p id="mensagem"></p>
+
+  <script>
+    document.getElementById("formulario").addEventListener("submit", function(e) {
+      e.preventDefault();
+
+      const formData = new FormData(e.target);
+      const dados = {};
+      formData.forEach((valor, chave) => dados[chave] = valor);
+
+      fetch("https://script.google.com/macros/s/AKfycbw9JlhX9UXWMEXyMHYxh7ciQdtDe5SZMni9mWqUZSy7bbMm9oEB1PzoY8J-sQkdtDzr/exec", {
+        method: "POST",
+        body: JSON.stringify(dados),
+        headers: { "Content-Type": "application/json" }
+      })
+      .then(res => res.text())
+      .then(resposta => {
+        document.getElementById("mensagem").textContent = "Dados enviados com sucesso!";
+        e.target.reset();
+      })
+      .catch(err => {
+        console.error(err);
+        document.getElementById("mensagem").textContent = "Erro ao enviar os dados.";
+      });
+    });
+  </script>
+</body>
+</html>
